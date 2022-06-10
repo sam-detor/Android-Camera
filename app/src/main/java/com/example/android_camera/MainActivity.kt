@@ -3,23 +3,25 @@ package com.example.android_camera
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.*
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.SurfaceView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.mlkit.common.model.LocalModel
-import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.objects.DetectedObject
 import com.google.mlkit.vision.objects.ObjectDetection
-import com.google.mlkit.vision.objects.ObjectDetector
 import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.task.core.BaseOptions
+import org.tensorflow.lite.task.vision.detector.ObjectDetector
+import org.tensorflow.lite.task.vision.detector.ObjectDetector.ObjectDetectorOptions
 
 
 class MainActivity : AppCompatActivity() {
@@ -55,13 +57,15 @@ class MainActivity : AppCompatActivity() {
     }
     private fun runObjectDetection(bitmap: Bitmap) {
         // Step 1: Create TFLite's TensorImage object
-        val image = TensorImage.fromBitmap(bitmap, 0)
-
-        val localModel = LocalModel.Builder()
-            .setAssetFilePath("lite-model_aiy_vision_classifier_birds_V1_3.tflite")
-            // or .setAbsoluteFilePath(absolute file path to model file)
-            // or .setUri(URI to model file)
+        val image = TensorImage.fromBitmap(bitmap)
+        val options = ObjectDetectorOptions.builder()
+            .setBaseOptions(BaseOptions.builder().useGpu().build())
+            .setMaxResults(1)
             .build()
+        val objectDetector = ObjectDetector.createFromFileAndOptions(
+            this, modelFile, options
+        )
+
 
         // Step 2: Initialize the detector object
         val options = CustomObjectDetectorOptions.Builder(localModel)
