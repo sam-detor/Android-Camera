@@ -5,16 +5,22 @@ import android.content.pm.PackageManager
 import android.graphics.*
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.view.SurfaceView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.google.mlkit.common.model.LocalModel
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.DetectedObject
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.ObjectDetector
+import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.tensorflow.lite.support.image.TensorImage
-import org.tensorflow.lite.task.vision.detector.ObjectDetector
+
 
 class MainActivity : AppCompatActivity() {
     private var previewSV: SurfaceView? = null
@@ -23,6 +29,7 @@ class MainActivity : AppCompatActivity() {
 
     private val job = SupervisorJob()
     private val mCoroutineScope = CoroutineScope(Dispatchers.IO + job)
+    private val TAG = "MLKit-ODT"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,9 +40,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStart() {
+        //Log.d(TAG, "hi")
         super.onStart()
         cameraSource = CameraSource(this, object: CameraSource.CameraSourceListener {
             override fun processImage(image: Bitmap) {
+                //Log.d(TAG, "hi")
                 runObjectDetection(image)
             }
             override fun onFPSListener(fps: Int) {}
@@ -46,43 +55,69 @@ class MainActivity : AppCompatActivity() {
     }
     private fun runObjectDetection(bitmap: Bitmap) {
         // Step 1: Create TFLite's TensorImage object
-        val image = TensorImage.fromBitmap(bitmap)
+        val image = InputImage.fromBitmap(bitmap, 0)
+
+        val localModel = LocalModel.Builder()
+            .setAssetFilePath("model.tflite")
+            // or .setAbsoluteFilePath(absolute file path to model file)
+            // or .setUri(URI to model file)
+            .build()
 
         // Step 2: Initialize the detector object
-        val options = ObjectDetector.ObjectDetectorOptions.builder()
-            .setMaxResults(5)
-            .setScoreThreshold(0.5f)
+        val options = CustomObjectDetectorOptions.Builder(localModel)
+            .setDetectorMode(CustomObjectDetectorOptions.STREAM_MODE)
+            .enableClassification()
             .build()
-        val detector = ObjectDetector.createFromFileAndOptions(
-            this,
-            "coco_ssd_mobilenet_v1_1.0_quant.tflite",
-            options
-        )
+        val detector = ObjectDetection.getClient(options)
 
         // Step 3: Feed given image to the detector
-        val results = detector.detect(image)
+        detector.process(image).addOnSuccessListener { results ->
 
-        // Step 4: Parse the detection result and show it
-        val resultToDisplay = results.map {
-            // Get the top-1 category and craft the display text
-            val category = it.categories.first()
-            val text = "${category.label}, ${category.score.times(100).toInt()}%"
+            //debugPrint(results)
+            // Step 4: Parse the detection result and show it
+            val detectedObjects = results.map {
+                var text = "Unknown"
 
-            // Create a data object to display the detection result
-            DetectionResult(it.boundingBox, text)
+                // We will show the top confident detection result if it exist
+                if (it.labels.isNotEmpty()) {
+                    val firstLabel = it.labels.first()
+                    text = "${firstLabel.text}, ${firstLabel.confidence.times(100).toInt()}%"
+                }
+                BoxWithText(it.boundingBox, text)
+            }
+
+            // Draw the detection result on the input bitmap
+            val visualizedResult = drawDetectionResult(bitmap, detectedObjects)
+            //Log.d(TAG, "hi")
+            psv.setPreviewSurfaceView(visualizedResult)
         }
-        // Draw the detection result on the bitmap and show it.
-        val imgWithResult = drawDetectionResult(bitmap, resultToDisplay)
-        psv.setPreviewSurfaceView(imgWithResult)
+            .addOnFailureListener {
+                //psv.setPreviewSurfaceView(bitmap)
+
+            }
+    }
+
+    private fun debugPrint(detectedObjects: List<DetectedObject>) {
+        //Log.d("MLKit-ODT", "hi")
+        detectedObjects.forEachIndexed { index, detectedObject ->
+            val box = detectedObject.boundingBox
+            val TAG = "MLKit-ODT"
+            Log.d(TAG, "Detected object: $index")
+            Log.d(TAG, " trackingId: ${detectedObject.trackingId}")
+            Log.d(TAG, " boundingBox: (${box.left}, ${box.top}) - (${box.right},${box.bottom})")
+            detectedObject.labels.forEach {
+                Log.d(TAG, " categories: ${it.text}")
+                Log.d(TAG, " confidence: ${it.confidence}")
+            }
+        }
     }
 
     /**
-     * drawDetectionResult(bitmap: Bitmap, detectionResults: List<DetectionResult>
-     *      Draw a box around each objects and show the object's name.
+     * Draw bounding boxes around objects together with the object's name.
      */
     private fun drawDetectionResult(
         bitmap: Bitmap,
-        detectionResults: List<DetectionResult>
+        detectionResults: List<BoxWithText>
     ): Bitmap {
         val outputBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(outputBitmap)
@@ -94,9 +129,8 @@ class MainActivity : AppCompatActivity() {
             pen.color = Color.RED
             pen.strokeWidth = 8F
             pen.style = Paint.Style.STROKE
-            val box = it.boundingBox
+            val box = it.box
             canvas.drawRect(box, pen)
-
 
             val tagSize = Rect(0, 0, 0, 0)
 
@@ -186,3 +220,7 @@ class MainActivity : AppCompatActivity() {
  *      A class to store the visualization info of a detected object.
  */
 data class DetectionResult(val boundingBox: RectF, val text: String)
+/**
+ * A general-purpose data class to store detection result for visualization
+ */
+data class BoxWithText(val box: Rect, val text: String)
