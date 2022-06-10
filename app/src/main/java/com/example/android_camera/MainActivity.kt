@@ -55,10 +55,10 @@ class MainActivity : AppCompatActivity() {
     }
     private fun runObjectDetection(bitmap: Bitmap) {
         // Step 1: Create TFLite's TensorImage object
-        val image = InputImage.fromBitmap(bitmap, 0)
+        val image = TensorImage.fromBitmap(bitmap, 0)
 
         val localModel = LocalModel.Builder()
-            .setAssetFilePath("model.tflite")
+            .setAssetFilePath("lite-model_aiy_vision_classifier_birds_V1_3.tflite")
             // or .setAbsoluteFilePath(absolute file path to model file)
             // or .setUri(URI to model file)
             .build()
