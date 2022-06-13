@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
                 else
                 {
                     Log.d("TEST", "hi")
-                    psv.setPreviewSurfaceView(image)
+                    psv.setPreviewSurfaceView(old_img)
                 }
             }
             override fun onFPSListener(fps: Int) {}
@@ -84,13 +84,18 @@ class MainActivity : AppCompatActivity() {
 
         done = false
         // Step 1: Create TFLite's TensorImage object
-        val image = TensorImage.fromBitmap(bitmap)
+        val resizedBitmap = Bitmap.createScaledBitmap(
+            bitmap, 300, 300, false)
+        val image = TensorImage.fromBitmap(resizedBitmap)
         val options = ObjectDetectorOptions.builder()
-            .setBaseOptions(BaseOptions.builder().useGpu().build())
+            .setBaseOptions(BaseOptions.builder().setNumThreads(2).useGpu().build())
             .setMaxResults(1)
+            .setScoreThreshold(0.5f)
             .build()
+
         val objectDetector = ObjectDetector.createFromFileAndOptions(
             this, "model.tflite", options)
+
         val results = objectDetector.detect(image)
 
         // Step 4: Parse the detection result and show it
@@ -103,7 +108,7 @@ class MainActivity : AppCompatActivity() {
             DetectionResult(it.boundingBox, text)
         }
         // Draw the detection result on the bitmap and show it.
-        val imgWithResult = drawDetectionResult(bitmap, resultToDisplay)
+        val imgWithResult = drawDetectionResult(resizedBitmap, resultToDisplay)
         runOnUiThread {
             psv.setPreviewSurfaceView(imgWithResult)
         }
