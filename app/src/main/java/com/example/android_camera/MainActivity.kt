@@ -10,10 +10,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.mlkit.common.model.LocalModel
-import com.google.mlkit.vision.objects.DetectedObject
-import com.google.mlkit.vision.objects.ObjectDetection
-import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,6 +29,22 @@ class MainActivity : AppCompatActivity() {
     private val job = SupervisorJob()
     private val mCoroutineScope = CoroutineScope(Dispatchers.IO + job)
     private val TAG = "MLKit-ODT"
+    //640 by 480
+    private var old_img = Bitmap.createBitmap(480,640,Bitmap.Config.ARGB_8888)
+    /*private val options = ObjectDetectorOptions.builder()
+        .setBaseOptions(BaseOptions.builder().useGpu().build())
+        .setMaxResults(1)
+        .build()
+    private val objectDetector = ObjectDetector.createFromFileAndOptions(
+        this, "coco_ssd_mobilenet_v1_1.0_quant.tflite", options
+     */
+
+    /*
+    companion object {
+        val done = true
+    }
+    */
+     private var done = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,8 +59,20 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         cameraSource = CameraSource(this, object: CameraSource.CameraSourceListener {
             override fun processImage(image: Bitmap) {
+                //Log.d("TEST-H", image.height.toString())
+                //Log.d("TEST-W", image.width.toString())
                 //Log.d(TAG, "hi")
-                runObjectDetection(image)
+                if(done)
+                {
+                    lifecycleScope.launch(Dispatchers.Default)
+                    { runObjectDetection(image)}
+                    //runObjectDetection(image)
+                }
+                else
+                {
+                    Log.d("TEST", "hi")
+                    psv.setPreviewSurfaceView(image)
+                }
             }
             override fun onFPSListener(fps: Int) {}
         })
@@ -56,6 +81,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun runObjectDetection(bitmap: Bitmap) {
+
+        done = false
         // Step 1: Create TFLite's TensorImage object
         val image = TensorImage.fromBitmap(bitmap)
         val options = ObjectDetectorOptions.builder()
@@ -63,44 +90,27 @@ class MainActivity : AppCompatActivity() {
             .setMaxResults(1)
             .build()
         val objectDetector = ObjectDetector.createFromFileAndOptions(
-            this, modelFile, options
-        )
+            this, "model.tflite", options)
+        val results = objectDetector.detect(image)
 
+        // Step 4: Parse the detection result and show it
+        val resultToDisplay = results.map {
+            // Get the top-1 category and craft the display text
+            val category = it.categories.first()
+            val text = "${category.label}, ${category.score.times(100).toInt()}%"
 
-        // Step 2: Initialize the detector object
-        val options = CustomObjectDetectorOptions.Builder(localModel)
-            .setDetectorMode(CustomObjectDetectorOptions.STREAM_MODE)
-            .enableClassification()
-            .build()
-        val detector = ObjectDetection.getClient(options)
-
-        // Step 3: Feed given image to the detector
-        detector.process(image).addOnSuccessListener { results ->
-
-            //debugPrint(results)
-            // Step 4: Parse the detection result and show it
-            val detectedObjects = results.map {
-                var text = "Unknown"
-
-                // We will show the top confident detection result if it exist
-                if (it.labels.isNotEmpty()) {
-                    val firstLabel = it.labels.first()
-                    text = "${firstLabel.text}, ${firstLabel.confidence.times(100).toInt()}%"
-                }
-                BoxWithText(it.boundingBox, text)
-            }
-
-            // Draw the detection result on the input bitmap
-            val visualizedResult = drawDetectionResult(bitmap, detectedObjects)
-            //Log.d(TAG, "hi")
-            psv.setPreviewSurfaceView(visualizedResult)
+            // Create a data object to display the detection result
+            DetectionResult(it.boundingBox, text)
         }
-            .addOnFailureListener {
-                //psv.setPreviewSurfaceView(bitmap)
-
-            }
+        // Draw the detection result on the bitmap and show it.
+        val imgWithResult = drawDetectionResult(bitmap, resultToDisplay)
+        runOnUiThread {
+            psv.setPreviewSurfaceView(imgWithResult)
+        }
+        old_img = imgWithResult
+        done = true
     }
-
+/*
     private fun debugPrint(detectedObjects: List<DetectedObject>) {
         //Log.d("MLKit-ODT", "hi")
         detectedObjects.forEachIndexed { index, detectedObject ->
@@ -115,13 +125,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
+*/
     /**
-     * Draw bounding boxes around objects together with the object's name.
+     * drawDetectionResult(bitmap: Bitmap, detectionResults: List<DetectionResult>
+     *      Draw a box around each objects and show the object's name.
      */
     private fun drawDetectionResult(
         bitmap: Bitmap,
-        detectionResults: List<BoxWithText>
+        detectionResults: List<DetectionResult>
     ): Bitmap {
         val outputBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(outputBitmap)
@@ -133,8 +144,9 @@ class MainActivity : AppCompatActivity() {
             pen.color = Color.RED
             pen.strokeWidth = 8F
             pen.style = Paint.Style.STROKE
-            val box = it.box
+            val box = it.boundingBox
             canvas.drawRect(box, pen)
+
 
             val tagSize = Rect(0, 0, 0, 0)
 
