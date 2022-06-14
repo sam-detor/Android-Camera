@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity() {
         val image = InputImage.fromBitmap(bitmap, 0)
 
         val localModel = LocalModel.Builder()
-            .setAssetFilePath("model.tflite")
+            .setAssetFilePath("lite-model_aiy_vision_classifier_birds_V1_3.tflite")
             // or .setAbsoluteFilePath(absolute file path to model file)
             // or .setUri(URI to model file)
             .build()
@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
         val options = CustomObjectDetectorOptions.Builder(localModel)
             .setDetectorMode(CustomObjectDetectorOptions.STREAM_MODE)
             .enableClassification()
+            .setClassificationConfidenceThreshold(0.5f)
             .build()
         val detector = ObjectDetection.getClient(options)
 
@@ -79,9 +80,9 @@ class MainActivity : AppCompatActivity() {
                 var text = "Unknown"
 
                 // We will show the top confident detection result if it exist
-                if (it.labels.isNotEmpty()) {
+                if (it.labels.isNotEmpty() && it.labels.first().text == "Branta canadensis") {
                     val firstLabel = it.labels.first()
-                    text = "${firstLabel.text}, ${firstLabel.confidence.times(100).toInt()}%"
+                    text = "Goose, ${firstLabel.confidence.times(100).toInt()}%"
                 }
                 BoxWithText(it.boundingBox, text)
             }
