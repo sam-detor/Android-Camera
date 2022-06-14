@@ -10,12 +10,15 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
+import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp
 import org.tensorflow.lite.task.core.BaseOptions
 import org.tensorflow.lite.task.vision.detector.ObjectDetector
 import org.tensorflow.lite.task.vision.detector.ObjectDetector.ObjectDetectorOptions
@@ -30,14 +33,10 @@ class MainActivity : AppCompatActivity() {
     private val mCoroutineScope = CoroutineScope(Dispatchers.IO + job)
     private val TAG = "MLKit-ODT"
     //640 by 480
-    private var old_img = Bitmap.createBitmap(480,640,Bitmap.Config.ARGB_8888)
-    /*private val options = ObjectDetectorOptions.builder()
-        .setBaseOptions(BaseOptions.builder().useGpu().build())
-        .setMaxResults(1)
-        .build()
-    private val objectDetector = ObjectDetector.createFromFileAndOptions(
-        this, "coco_ssd_mobilenet_v1_1.0_quant.tflite", options
-     */
+    private var old_img = Bitmap.createBitmap(300,300,Bitmap.Config.ARGB_8888)
+
+    private var options: ObjectDetectorOptions? = null
+    private var objectDetector: ObjectDetector? = null
 
     /*
     companion object {
@@ -59,20 +58,22 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         cameraSource = CameraSource(this, object: CameraSource.CameraSourceListener {
             override fun processImage(image: Bitmap) {
-                //Log.d("TEST-H", image.height.toString())
+            //Log.d("TEST-H", image.height.toString())
                 //Log.d("TEST-W", image.width.toString())
                 //Log.d(TAG, "hi")
+
                 if(done)
                 {
-                    lifecycleScope.launch(Dispatchers.Default)
-                    { runObjectDetection(image)}
-                    //runObjectDetection(image)
+                    //lifecycleScope.launch(Dispatchers.Default)
+                    //{ runObjectDetection(image)}
+                    runObjectDetection(image)
                 }
                 else
                 {
                     Log.d("TEST", "hi")
                     psv.setPreviewSurfaceView(old_img)
                 }
+
             }
             override fun onFPSListener(fps: Int) {}
         })
@@ -83,20 +84,23 @@ class MainActivity : AppCompatActivity() {
     private fun runObjectDetection(bitmap: Bitmap) {
 
         done = false
+        if(objectDetector == null)
+        {
+            init()
+        }
+        val image = TensorImage(DataType.UINT8)
+        image.load(bitmap)
+        val imageProcessor = ImageProcessor.Builder().apply {
+            add(ResizeWithCropOrPadOp(300, 300))
+            add(ResizeOp(300, 300, ResizeOp.ResizeMethod.BILINEAR))
+        }.build()
+        imageProcessor.process(image)
         // Step 1: Create TFLite's TensorImage object
-        val resizedBitmap = Bitmap.createScaledBitmap(
-            bitmap, 300, 300, false)
-        val image = TensorImage.fromBitmap(resizedBitmap)
-        val options = ObjectDetectorOptions.builder()
-            .setBaseOptions(BaseOptions.builder().setNumThreads(2).useGpu().build())
-            .setMaxResults(1)
-            .setScoreThreshold(0.5f)
-            .build()
+        //val resizedBitmap = Bitmap.createScaledBitmap(
+           // bitmap, 300, 300, false)
+       // val image = TensorImage.fromBitmap(resizedBitmap)
 
-        val objectDetector = ObjectDetector.createFromFileAndOptions(
-            this, "model.tflite", options)
-
-        val results = objectDetector.detect(image)
+        val results = objectDetector!!.detect(image)
 
         // Step 4: Parse the detection result and show it
         val resultToDisplay = results.map {
@@ -108,10 +112,10 @@ class MainActivity : AppCompatActivity() {
             DetectionResult(it.boundingBox, text)
         }
         // Draw the detection result on the bitmap and show it.
-        val imgWithResult = drawDetectionResult(resizedBitmap, resultToDisplay)
-        runOnUiThread {
+        val imgWithResult = drawDetectionResult(image.bitmap, resultToDisplay)
+        //runOnUiThread {
             psv.setPreviewSurfaceView(imgWithResult)
-        }
+        //}
         old_img = imgWithResult
         done = true
     }
@@ -131,6 +135,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 */
+    private fun init() {
+        options = ObjectDetectorOptions.builder()
+            .setBaseOptions(BaseOptions.builder().setNumThreads(2).useGpu().build())
+            .setMaxResults(1)
+            .setScoreThreshold(0.5f)
+            .build()
+
+        objectDetector = ObjectDetector.createFromFileAndOptions(
+            this, "model.tflite", options)
+    }
     /**
      * drawDetectionResult(bitmap: Bitmap, detectionResults: List<DetectionResult>
      *      Draw a box around each objects and show the object's name.

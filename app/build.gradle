@@ -52,8 +52,8 @@ dependencies {
 
     // Tensorflow lite dependencies
     //implementation 'org.tensorflow:tensorflow-lite:2.8.0'
-    //implementation 'org.tensorflow:tensorflow-lite-gpu:2.8.0'
-    //implementation 'org.tensorflow:tensorflow-lite-support:2.8.0'
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.8.0'
+   // implementation 'org.tensorflow:tensorflow-lite-support:2.8.0'
     // TFLite
     //implementation 'org.tensorflow:tensorflow-lite-task-vision:0.3.1'
     //implementation 'com.google.mlkit:object-detection-custom:17.0.0'
