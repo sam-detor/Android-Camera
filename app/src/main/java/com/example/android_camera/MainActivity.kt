@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
         val options = CustomObjectDetectorOptions.Builder(localModel)
             .setDetectorMode(CustomObjectDetectorOptions.STREAM_MODE)
             .enableClassification()
+            .enableMultipleObjects()
             .setClassificationConfidenceThreshold(0.5f)
             .build()
         val detector = ObjectDetection.getClient(options)
@@ -76,6 +77,7 @@ class MainActivity : AppCompatActivity() {
 
             //debugPrint(results)
             // Step 4: Parse the detection result and show it
+            /*
             val detectedObjects = results.map {
                 var text = "Unknown"
 
@@ -83,8 +85,20 @@ class MainActivity : AppCompatActivity() {
                 if (it.labels.isNotEmpty() && it.labels.first().text == "Branta canadensis") {
                     val firstLabel = it.labels.first()
                     text = "Goose, ${firstLabel.confidence.times(100).toInt()}%"
+
                 }
                 BoxWithText(it.boundingBox, text)
+
+            }
+            */
+            val detectedObjects: MutableList<BoxWithText> = mutableListOf()
+
+            for (result in results) {
+                if (result.labels.isNotEmpty() && result.labels.first().text == "Branta canadensis") {
+                    val firstLabel = result.labels.first()
+                    val text = "Goose, ${firstLabel.confidence.times(100).toInt()}%"
+                    detectedObjects.add(BoxWithText(result.boundingBox, text))
+                }
             }
 
             // Draw the detection result on the input bitmap
