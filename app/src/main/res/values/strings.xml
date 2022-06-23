@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Android-Camera</string>
+    <string name="btn_cnt">CONNECT</string>
+    <string name="btn_send">SEND</string>
+    <string name="str_devVendorId">Vendor:</string>
+    <string name="str_devProductId">Product:</string>
+    <string name="str_devName">Device name:</string>
 </resources>

@@ -1,15 +1,23 @@
 package com.example.android_camera
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.*
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Debug
+import android.os.IBinder
 import android.util.Log
 import android.view.SurfaceView
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.example.stm32usbserial.PodUsbSerialService
 import com.google.mlkit.common.model.LocalModel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.objects.DetectedObject
@@ -20,6 +28,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
+import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp
+import org.tensorflow.lite.support.image.ops.Rot90Op
 
 
 class MainActivity : AppCompatActivity() {
@@ -30,6 +44,15 @@ class MainActivity : AppCompatActivity() {
     private val job = SupervisorJob()
     private val mCoroutineScope = CoroutineScope(Dispatchers.IO + job)
     private val TAG = "MLKit-ODT"
+
+    //car stuff:
+    private var mTvDevName: TextView? = null
+    private var mTvDevVendorId: TextView? = null
+    private var mTvDevProductId: TextView? = null
+    private var mTvRxMsg: TextView? = null
+    private var mPodUsbSerialService: PodUsbSerialService? = null
+    private var mBounded: Boolean = false
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +65,18 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         //Log.d(TAG, "hi")
         super.onStart()
+
+        //stuff for the car:
+        // start and bind service
+        val mIntent = Intent(this, PodUsbSerialService::class.java)
+        startService(mIntent)
+        bindService(mIntent, mConnection, BIND_AUTO_CREATE)
+        // set filter for service
+        val filter = IntentFilter()
+        filter.addAction(PodUsbSerialService.ACTION_USB_MSGRECEIVED)
+        filter.addAction(PodUsbSerialService.ACTION_USB_CONNECTED)
+
+
         cameraSource = CameraSource(this, object: CameraSource.CameraSourceListener {
             override fun processImage(image: Bitmap) {
                 //Log.d(TAG, "hi")
@@ -53,9 +88,29 @@ class MainActivity : AppCompatActivity() {
             cameraSource?.initCamera()
         }
     }
+
+    // car stuff: get service instance
+    private var mConnection: ServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, service: IBinder) {
+            Toast.makeText(this@MainActivity, "Service is connected", Toast.LENGTH_SHORT).show()
+            mBounded = true
+            val mUsbBinder: PodUsbSerialService.UsbBinder = service as PodUsbSerialService.UsbBinder
+            mPodUsbSerialService = mUsbBinder.getService()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            Toast.makeText(this@MainActivity, "Service is disconnected", Toast.LENGTH_SHORT).show()
+            mBounded = false
+            mPodUsbSerialService = null
+        }
+    }
     private fun runObjectDetection(bitmap: Bitmap) {
-        // Step 1: Create TFLite's TensorImage object
-        val image = InputImage.fromBitmap(bitmap, 0)
+        // Step 1: Create TFLite's TensorImage object]
+        //val rotationMatrix = Matrix()
+        //rotationMatrix.postRotate(90F)
+        //val rotatedImage = Bitmap.createBitmap(bitmap,0,0,bitmap.width, bitmap.height, rotationMatrix, true)
+        val processedImg = preProcessInputImage(bitmap)
+        val image = processedImg?.let { InputImage.fromBitmap(it.bitmap, 0) }
 
         val localModel = LocalModel.Builder()
             .setAssetFilePath("lite-model_aiy_vision_classifier_birds_V1_3.tflite")
@@ -73,43 +128,86 @@ class MainActivity : AppCompatActivity() {
         val detector = ObjectDetection.getClient(options)
 
         // Step 3: Feed given image to the detector
-        detector.process(image).addOnSuccessListener { results ->
+        if (image != null) {
+            detector.process(image).addOnSuccessListener { results ->
 
-            //debugPrint(results)
-            // Step 4: Parse the detection result and show it
-            /*
-            val detectedObjects = results.map {
-                var text = "Unknown"
+                //debugPrint(results)
+                // Step 4: Parse the detection result and show it
+                /*
+                val detectedObjects = results.map {
+                    var text = "Unknown"
 
-                // We will show the top confident detection result if it exist
-                if (it.labels.isNotEmpty() && it.labels.first().text == "Branta canadensis") {
-                    val firstLabel = it.labels.first()
-                    text = "Goose, ${firstLabel.confidence.times(100).toInt()}%"
+                    // We will show the top confident detection result if it exist
+                    if (it.labels.isNotEmpty() && it.labels.first().text == "Branta canadensis") {
+                        val firstLabel = it.labels.first()
+                        text = "Goose, ${firstLabel.confidence.times(100).toInt()}%"
+
+                    }
+                    BoxWithText(it.boundingBox, text)
 
                 }
-                BoxWithText(it.boundingBox, text)
+                */
+                val detectedObjects: MutableList<BoxWithText> = mutableListOf()
 
-            }
-            */
-            val detectedObjects: MutableList<BoxWithText> = mutableListOf()
-
-            for (result in results) {
-                if (result.labels.isNotEmpty() && result.labels.first().text == "Branta canadensis") {
-                    val firstLabel = result.labels.first()
-                    val text = "Goose, ${firstLabel.confidence.times(100).toInt()}%"
-                    detectedObjects.add(BoxWithText(result.boundingBox, text))
+                for (result in results) {
+                    if (result.labels.isNotEmpty() && result.labels.first().text == "Branta canadensis") {
+                        val firstLabel = result.labels.first()
+                        val text = "Goose, ${firstLabel.confidence.times(100).toInt()}%"
+                        //detectedObjects.add(BoxWithText(Rect(result.boundingBox.top, result.boundingBox.right, result.boundingBox.bottom, result.boundingBox.left), text))
+                        detectedObjects.add(BoxWithText(result.boundingBox, text))
+                    }
                 }
-            }
 
-            // Draw the detection result on the input bitmap
-            val visualizedResult = drawDetectionResult(bitmap, detectedObjects)
-            //Log.d(TAG, "hi")
-            psv.setPreviewSurfaceView(visualizedResult)
+                // Draw the detection result on the input bitmap
+                val visualizedResult = drawDetectionResult(processedImg.bitmap, detectedObjects)
+                //Log.d(TAG, "hi")
+                if (detectedObjects.size >= 1) {
+                    calculateAndDraw(detectedObjects)
+                }
+                val rotationMatrix = Matrix()
+                rotationMatrix.postRotate(90F)
+                val rotatedImage = Bitmap.createBitmap(visualizedResult,0,0,visualizedResult.width, visualizedResult.height, rotationMatrix, true)
+                psv.setPreviewSurfaceView(rotatedImage)
+            }
+                .addOnFailureListener {
+                    //psv.setPreviewSurfaceView(bitmap)
+
+                }
         }
-            .addOnFailureListener {
-                //psv.setPreviewSurfaceView(bitmap)
+    }
 
+    private fun preProcessInputImage(bitmap: Bitmap): TensorImage? {
+        val width: Int = bitmap.width
+        val height: Int = bitmap.height
+
+        val size = if (height > width) width else height
+        val imageProcessor = ImageProcessor.Builder().apply {
+            add(Rot90Op())
+            //add(ResizeWithCropOrPadOp(size, size))
+            //add(ResizeOp(width, height, ResizeOp.ResizeMethod.BILINEAR))
+        }.build()
+        val tensorImage = TensorImage(DataType.UINT8)
+        tensorImage.load(bitmap)
+        return imageProcessor.process(tensorImage)
+    }
+
+    private fun calculateAndDraw(detectedObjects: List<BoxWithText>) {
+        var center = 0
+        for (box in detectedObjects) {
+            var indiv_center = 0;
+            if (box.box.left > box.box.right) {
+                indiv_center = (box.box.left -  box.box.right)/2 + box.box.right
             }
+            else {
+                indiv_center = (box.box.right -  box.box.left)/2 + box.box.left
+            }
+            center += indiv_center
+        }
+        center  = center/detectedObjects.size
+        val message = "${center}%"
+        val textView = findViewById<TextView>(R.id.textView).apply {
+            text = message
+        }
     }
 
     private fun debugPrint(detectedObjects: List<DetectedObject>) {
@@ -226,6 +324,22 @@ class MainActivity : AppCompatActivity() {
                     image, Rect(0, 0, image.width, image.height),
                     Rect(left, top, right, bottom), null)
                 holder.unlockCanvasAndPost(canvas)
+            }
+        }
+    }
+    // broadcast receiver to update message and device info
+    private val mBroadcastReceiver = object: BroadcastReceiver() {
+        @SuppressLint("SetTextI18n")
+        override fun onReceive(p0: Context?, p1: Intent?) {
+            when (p1?.action) {
+                PodUsbSerialService.ACTION_USB_MSGRECEIVED -> {
+                    mTvRxMsg?.text = mPodUsbSerialService?.mRxMsg
+                }
+                PodUsbSerialService.ACTION_USB_CONNECTED -> {
+                    mTvDevName?.text = getString(R.string.str_devName) + mPodUsbSerialService?.mDevName
+                    mTvDevVendorId?.text = getString(R.string.str_devVendorId) + mPodUsbSerialService?.mDevVendorId.toString()
+                    mTvDevProductId?.text = getString(R.string.str_devProductId) + mPodUsbSerialService?.mDevProductId.toString()
+                }
             }
         }
     }
