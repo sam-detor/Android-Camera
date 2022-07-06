@@ -5,24 +5,28 @@ import android.annotation.SuppressLint
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.*
-import androidx.appcompat.app.AppCompatActivity
+import android.location.Location
 import android.os.Bundle
-import android.os.Debug
 import android.os.IBinder
 import android.util.Log
 import android.view.SurfaceView
 import android.widget.Button
-import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.stm32usbserial.PodUsbSerialService
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.CancellationToken
+import com.google.android.gms.tasks.OnTokenCanceledListener
+import com.google.android.material.textfield.TextInputEditText
 import com.google.mlkit.common.model.LocalModel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.objects.DetectedObject
 import com.google.mlkit.vision.objects.ObjectDetection
-import com.google.mlkit.vision.objects.ObjectDetector
 import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,8 +35,6 @@ import kotlinx.coroutines.launch
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
-import org.tensorflow.lite.support.image.ops.ResizeOp
-import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp
 import org.tensorflow.lite.support.image.ops.Rot90Op
 
 
@@ -53,13 +55,28 @@ class MainActivity : AppCompatActivity() {
     private var mPodUsbSerialService: PodUsbSerialService? = null
     private var mBounded: Boolean = false
 
+    //Location Stuff
+    private var myLocation: LocationHandler? = null
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.gps_layout)
+        val btn: Button = findViewById(R.id.button2)
 
-        previewSV = findViewById(R.id.sv_preview)
+        btn.setOnClickListener {
+
+            val length: TextInputEditText = findViewById(R.id.length)
+            val width: TextInputEditText = findViewById(R.id.width)
+            myLocation = LocationHandler(this,LocationServices.getFusedLocationProviderClient(this), findViewById(R.id.coordinates))
+            myLocation?.setWidth(width.text.toString().toFloat())
+            myLocation?.setLength(length.text.toString().toFloat())
+            //myLocation?.setReferenceLocation();
+            myLocation?.enableLocation();
+        }
         requestPermission()
+        previewSV = findViewById(R.id.sv_preview)
+
     }
 
     override fun onStart() {
@@ -343,6 +360,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
 }
 /**
  * DetectionResult
