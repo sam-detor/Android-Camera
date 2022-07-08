@@ -17,6 +17,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.stm32usbserial.CommanderPacket
+import com.example.stm32usbserial.CrtpPacket
 import com.example.stm32usbserial.PodUsbSerialService
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -55,26 +57,14 @@ class MainActivity : AppCompatActivity() {
     private var mPodUsbSerialService: PodUsbSerialService? = null
     private var mBounded: Boolean = false
 
-    //Location Stuff
-    private var myLocation: LocationHandler? = null
+    //driving stuff
+    private var myDriver: Driver = Driver()
+
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.gps_layout)
-        val btn: Button = findViewById(R.id.button2)
-
-        btn.setOnClickListener {
-
-            val length: TextInputEditText = findViewById(R.id.length)
-            val width: TextInputEditText = findViewById(R.id.width)
-            myLocation = LocationHandler(this,LocationServices.getFusedLocationProviderClient(this), findViewById(R.id.coordinates))
-            myLocation?.setWidth(width.text.toString().toFloat())
-            myLocation?.setLength(length.text.toString().toFloat())
-            //myLocation?.setReferenceLocation();
-            myLocation?.enableLocation();
-        }
-        requestPermission()
+        setContentView(R.layout.activity_main)
         previewSV = findViewById(R.id.sv_preview)
 
     }
@@ -92,6 +82,8 @@ class MainActivity : AppCompatActivity() {
         val filter = IntentFilter()
         filter.addAction(PodUsbSerialService.ACTION_USB_MSGRECEIVED)
         filter.addAction(PodUsbSerialService.ACTION_USB_CONNECTED)
+
+        //driving stuff
 
 
         cameraSource = CameraSource(this, object: CameraSource.CameraSourceListener {
@@ -178,6 +170,7 @@ class MainActivity : AppCompatActivity() {
                 // Draw the detection result on the input bitmap
                 val visualizedResult = drawDetectionResult(processedImg.bitmap, detectedObjects)
                 //Log.d(TAG, "hi")
+                myDriver.drive(mPodUsbSerialService,detectedObjects)
                 if (detectedObjects.size >= 1) {
                     calculateAndDraw(detectedObjects)
                 }
@@ -360,6 +353,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
 
 }
 /**
