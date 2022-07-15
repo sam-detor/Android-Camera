@@ -1,4 +1,4 @@
-package com.example.stm32usbserial
+package com.example.android_camera
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

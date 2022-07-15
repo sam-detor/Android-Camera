@@ -5,26 +5,15 @@ import android.annotation.SuppressLint
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.*
-import android.location.Location
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import android.view.SurfaceView
-import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.stm32usbserial.CommanderPacket
-import com.example.stm32usbserial.CrtpPacket
-import com.example.stm32usbserial.PodUsbSerialService
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.tasks.CancellationToken
-import com.google.android.gms.tasks.OnTokenCanceledListener
-import com.google.android.material.textfield.TextInputEditText
 import com.google.mlkit.common.model.LocalModel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.objects.DetectedObject
@@ -204,6 +193,7 @@ class MainActivity : AppCompatActivity() {
     private fun calculateAndDraw(detectedObjects: List<BoxWithText>) {
         var center = 0
         for (box in detectedObjects) {
+            /*
             var indiv_center = 0;
             if (box.box.left > box.box.right) {
                 indiv_center = (box.box.left -  box.box.right)/2 + box.box.right
@@ -211,7 +201,9 @@ class MainActivity : AppCompatActivity() {
             else {
                 indiv_center = (box.box.right -  box.box.left)/2 + box.box.left
             }
-            center += indiv_center
+            */
+
+            center += box.box.centerX()
         }
         center  = center/detectedObjects.size
         val message = "${center}%"

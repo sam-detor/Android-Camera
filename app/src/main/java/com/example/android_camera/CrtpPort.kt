@@ -1,4 +1,4 @@
-package com.example.stm32usbserial
+package com.example.android_camera
 
 enum class CrtpPort(port: Int) {
     CONSOLE(0),

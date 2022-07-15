@@ -1,4 +1,4 @@
-package com.example.stm32usbserial
+package com.example.android_camera
 
 import android.app.PendingIntent
 import android.app.Service
